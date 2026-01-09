@@ -1,39 +1,49 @@
 import streamlit as st
 import pickle
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import base64
+import os
 
-# =========================================
-# Streamlit Page Settings
-# =========================================
+# =====================================================
+# PAGE CONFIG
+# =====================================================
 st.set_page_config(
-    page_title="Text Sentiment Analysis (NB vs SVM)",
+    page_title="Sentiment Analysis Dashboard",
     page_icon="💬",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# =========================================
-# Load Saved Models & Metrics
-# =========================================
-nb = pickle.load(open("./models/nb_model.pkl", "rb"))
-svm = pickle.load(open("./models/svm_model.pkl", "rb"))
-tfidf = pickle.load(open("./models/tfidf.pkl", "rb"))
-metrics = pickle.load(open("./models/metrics.pkl", "rb"))
+# =====================================================
+# PATHS
+# =====================================================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODELS_DIR = os.path.join(BASE_DIR, "models")
 
-nb_acc = metrics["nb_accuracy"]
-svm_acc = metrics["svm_accuracy"]
-nb_report = metrics["nb_report"]
-svm_report = metrics["svm_report"]
-cm_nb = metrics["cm_nb"]
-cm_svm = metrics["cm_svm"]
+# =====================================================
+# LOAD MODELS & METRICS (SAFE)
+# =====================================================
+try:
+    nb = pickle.load(open(os.path.join(MODELS_DIR, "nb_model.pkl"), "rb"))
+    svm = pickle.load(open(os.path.join(MODELS_DIR, "svm_model.pkl"), "rb"))
+    tfidf = pickle.load(open(os.path.join(MODELS_DIR, "tfidf.pkl"), "rb"))
+    metrics = pickle.load(open(os.path.join(MODELS_DIR, "metrics.pkl"), "rb"))
+except Exception:
+    st.error("❌ Models not found. Please run the training script first.")
+    st.stop()
 
-# =========================================
-# Sidebar Navigation
-# =========================================
+# Safe access
+nb_acc = metrics.get("nb_accuracy", 0.0)
+svm_acc = metrics.get("svm_accuracy", 0.0)
+cm_nb = metrics.get("cm_nb")
+cm_svm = metrics.get("cm_svm")
+nb_report = metrics.get("nb_report")
+svm_report = metrics.get("svm_report")
+
+# =====================================================
+# SIDEBAR
+# =====================================================
 st.sidebar.title("📌 Navigation")
 section = st.sidebar.radio(
     "Choose a section",
@@ -41,66 +51,58 @@ section = st.sidebar.radio(
 )
 
 st.sidebar.markdown("---")
-st.sidebar.write("**Built with ❤️ using Python & Streamlit**")
-# =========================
-#   SECTION: LIVE DEMO
-# =========================
+st.sidebar.write("Built with ❤️ using Python & Streamlit")
+
+# =====================================================
+# SECTION 1: LIVE DEMO
+# =====================================================
 if section == "🏠 Live Demo":
     st.title("🔍 Live Sentiment Prediction")
-    st.write("Enter a sentence below and see predictions from both **Naive Bayes** and **SVM** models.")
+    st.write(
+        "Enter a sentence below and see predictions from both "
+        "**Naive Bayes** and **SVM** models."
+    )
 
-    # Main Input Text Box
     user_input = st.text_area(
         "Enter your sentence here:",
         height=120,
-        placeholder="Type something like: I love this product!"
+        placeholder="Example: I absolutely loved this movie!"
     )
 
-    # Predict Button
     if st.button("Predict Sentiment"):
         if user_input.strip() == "":
             st.warning("⚠️ Please enter some text.")
         else:
-            # Convert text to TF-IDF vector
             vec = tfidf.transform([user_input])
+            nb_pred = nb.predict(vec)[0]
+            svm_pred = svm.predict(vec)[0]
 
-            # Model Predictions
-            nb_res = nb.predict(vec)[0]
-            svm_res = svm.predict(vec)[0]
-
-            # Two-column layout
             col1, col2 = st.columns(2)
 
-            # ========= Naive Bayes Output =========
             with col1:
                 st.subheader("Naive Bayes")
-                if nb_res == 1:
+                if nb_pred == 1:
                     st.success("🟢 Positive")
                 else:
                     st.error("🔴 Negative")
 
-            # ========= SVM Output =========
             with col2:
                 st.subheader("SVM (LinearSVC)")
-                if svm_res == 1:
+                if svm_pred == 1:
                     st.success("🟢 Positive")
                 else:
                     st.error("🔴 Negative")
 
-    # Optional: Clear Button
-    st.button("Clear Input", on_click=lambda: st.session_state.update({"user_input": ""}))
 
-
-# =========================================
+# =====================================================
 # SECTION 2: MODEL PERFORMANCE
-# =========================================
+# =====================================================
 elif section == "📊 Model Performance":
     st.title("📈 Model Performance Dashboard")
-
-    st.markdown("Visual comparison of **Naive Bayes** and **SVM** models.")
+    st.write("Visual comparison of **Naive Bayes** and **SVM** models.")
 
     # ------------------------------
-    # Accuracy Progress Bars
+    # Accuracy Overview
     # ------------------------------
     st.subheader("🎯 Accuracy Overview")
 
@@ -113,29 +115,26 @@ elif section == "📊 Model Performance":
     st.markdown("---")
 
     # ------------------------------
-    # Accuracy Comparison Chart
+    # Accuracy Table & Bar Chart
     # ------------------------------
     col1, col2 = st.columns([1, 2])
 
     with col1:
-        st.write("### Accuracy Table")
-
+        st.subheader("Accuracy Table")
         acc_df = pd.DataFrame({
             "Model": ["Naive Bayes", "SVM"],
             "Accuracy": [nb_acc, svm_acc]
         }).set_index("Model")
-
         st.dataframe(acc_df.style.format("{:.3f}"))
 
     with col2:
-        st.write("### Accuracy Bar Chart")
-
-        fig_acc, ax = plt.subplots()
-        ax.bar(["Naive Bayes", "SVM"], [nb_acc, svm_acc], color=["#4C9AFF", "#36CFC9"])
+        st.subheader("Accuracy Bar Chart")
+        fig, ax = plt.subplots()
+        ax.bar(["Naive Bayes", "SVM"], [nb_acc, svm_acc])
         ax.set_ylim(0, 1)
         ax.set_ylabel("Accuracy")
         ax.set_title("Naive Bayes vs SVM")
-        st.pyplot(fig_acc)
+        st.pyplot(fig)
 
     st.markdown("---")
 
@@ -149,48 +148,59 @@ elif section == "📊 Model Performance":
     with col_cm1:
         st.write("### Naive Bayes")
         fig_nb, ax_nb = plt.subplots()
-        sns.heatmap(cm_nb, annot=True, fmt="d", cmap="Blues",
-                    xticklabels=['Negative', 'Positive'],
-                    yticklabels=['Negative', 'Positive'])
+        sns.heatmap(
+            cm_nb, annot=True, fmt="d", cmap="Blues",
+            xticklabels=["Negative", "Positive"],
+            yticklabels=["Negative", "Positive"]
+        )
+        ax_nb.set_xlabel("Predicted")
+        ax_nb.set_ylabel("Actual")
         st.pyplot(fig_nb)
 
     with col_cm2:
         st.write("### SVM")
         fig_svm, ax_svm = plt.subplots()
-        sns.heatmap(cm_svm, annot=True, fmt="d", cmap="Greens",
-                    xticklabels=['Negative', 'Positive'],
-                    yticklabels=['Negative', 'Positive'])
+        sns.heatmap(
+            cm_svm, annot=True, fmt="d", cmap="Greens",
+            xticklabels=["Negative", "Positive"],
+            yticklabels=["Negative", "Positive"]
+        )
+        ax_svm.set_xlabel("Predicted")
+        ax_svm.set_ylabel("Actual")
         st.pyplot(fig_svm)
 
     st.markdown("---")
 
     # ------------------------------
-    # Comparison Table (Precision, Recall, F1)
+    # Detailed Metrics (Optional)
     # ------------------------------
     st.subheader("📋 Detailed Metrics Comparison")
 
-    comparison_df = pd.DataFrame([
-        {
-            "Model": "Naive Bayes",
-            "Accuracy": nb_acc,
-            "Precision": nb_report["weighted avg"]["precision"],
-            "Recall": nb_report["weighted avg"]["recall"],
-            "F1-Score": nb_report["weighted avg"]["f1-score"],
-        },
-        {
-            "Model": "SVM",
-            "Accuracy": svm_acc,
-            "Precision": svm_report["weighted avg"]["precision"],
-            "Recall": svm_report["weighted avg"]["recall"],
-            "F1-Score": svm_report["weighted avg"]["f1-score"],
-        }
-    ]).set_index("Model")
+    if nb_report and svm_report:
+        metrics_df = pd.DataFrame([
+            {
+                "Model": "Naive Bayes",
+                "Accuracy": nb_acc,
+                "Precision": nb_report["weighted avg"]["precision"],
+                "Recall": nb_report["weighted avg"]["recall"],
+                "F1-Score": nb_report["weighted avg"]["f1-score"],
+            },
+            {
+                "Model": "SVM",
+                "Accuracy": svm_acc,
+                "Precision": svm_report["weighted avg"]["precision"],
+                "Recall": svm_report["weighted avg"]["recall"],
+                "F1-Score": svm_report["weighted avg"]["f1-score"],
+            }
+        ]).set_index("Model")
 
-    st.dataframe(comparison_df.style.format("{:.3f}"))
+        st.dataframe(metrics_df.style.format("{:.3f}"))
+    else:
+        st.info("Detailed classification metrics not available.")
 
-# =========================================
+# =====================================================
 # SECTION 3: ABOUT PROJECT
-# =========================================
+# =====================================================
 elif section == "ℹ️ About Project":
     st.title("ℹ️ Project Overview")
 
@@ -217,17 +227,17 @@ elif section == "ℹ️ About Project":
     - Python  
     - Scikit-learn  
     - Pandas  
-    - Matplotlib + Seaborn  
+    - Matplotlib & Seaborn  
     - Streamlit  
     """)
 
-# =========================================
+# =====================================================
 # FOOTER
-# =========================================
+# =====================================================
 st.markdown("---")
 st.markdown(
     "<div style='text-align:center; font-size:13px;'>"
-    "💻 Sentiment Analysis Dashboard • Built with ❤️ using Streamlit & Scikit-Learn"
+    "📊 Sentiment Analysis Dashboard • Built with ❤️ using Streamlit & Scikit-Learn"
     "</div>",
     unsafe_allow_html=True
 )
