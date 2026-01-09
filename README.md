@@ -4,6 +4,11 @@ A complete end-to-end **Text Sentiment Analysis** project that classifies text a
 The project includes model training, evaluation, and an interactive **Streamlit dashboard** for live prediction and performance comparison.
 
 ---
+## 🌐 Live Demo
+
+👉 Try the live app:  
+https://sentiment-analysis-nb-svm.streamlit.app/
+
 
 ## 🚀 Features
 
